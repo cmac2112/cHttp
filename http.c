@@ -45,6 +45,8 @@ int main() {
     int yes=1;
     char s[INET6_ADDRSTRLEN];
 
+    ssize_t recvFd;
+
     memset(&hints, 0, sizeof hints); //set our hints to be empty
 
     //assign flags we need
@@ -105,13 +107,90 @@ int main() {
             perror("accept");
             continue;
         }else {
-            printf("Connection recieved\n");
+            printf("Connection received\n");
         }
         const char *inetop;
         inetop = inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
         printf("from: %s\n", inetop);
         if (!fork()) {
             close(socketFd);
+            char buf[2048];
+            recvFd = recv(new_fd, buf, sizeof(buf), 0);
+            if (recvFd == -1) {
+                perror("recv");
+                const char *body = "<h1>Oops your request did not work 404</h1>";
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                    "HTTP/1.1 404 Not Found\r\n"
+                    "Content-Type: text/html\r\n"
+                    "Content-Length: %zu\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "%s", strlen(body), body);
+                if (send(new_fd, msg, strlen(msg), 0) == -1) {
+                    perror("send");
+                }
+                close(new_fd);
+                exit(0);
+            }
+                //determine what is in buf
+                const char *home = "GET /home";
+                char *val;
+
+
+                //strstr reads until the \0 character, setup our buf to have one
+                buf[recvFd] = '\0';
+                printf("%s", buf);
+                if ((val = strstr(buf, home)) != NULL){
+                    //no /home string found
+                    const char *body =
+                        "<h1>Hey you hit the /home request worked!</h1>"
+                        "<button onclick=\"hitUsers()\">click</button>"
+                        "<pre id=\"result\"></pre>"
+                        "<script>"
+                        "function hitUsers() {"
+                        "  fetch('/users')"
+                        "    .then(function(r) { return r.text(); })"
+                        "    .then(function(text) { document.getElementById('result').textContent = text; })"
+                        "    .catch(function(err) { document.getElementById('result').textContent = 'Error: ' + err; });"
+                        "}"
+                        "</script>";
+                    char msg[1024];
+                    snprintf(msg, sizeof(msg),
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/html\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n"
+                        "\r\n"
+                        "%s", strlen(body), body);
+                    if (send(new_fd, msg, strlen(msg), 0) == -1) {
+                        perror("send");
+                    }
+                    printf("200 OK /home\n");
+                    close(new_fd);
+                    exit(0);
+                }
+
+                //now lets check against a param request and return json
+                const char *user = "GET /users";
+                if (strstr(buf, user) != NULL) {
+                    const char *data = "json data here";
+                    char msg[512];
+                    snprintf(msg, sizeof(msg),
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/html\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n"
+                        "\r\n"
+                        "%s", strlen(data), data);
+                    if (send(new_fd, msg, strlen(msg), 0) == -1) {
+                        perror("send");
+                    }
+                    printf("200 OK /users\n");
+                    close(new_fd);
+                    exit(0);
+                }
+
             const char *body = "<h1>Hello World im sending you this from C</h1><p>This is some basic html</p>";
             char msg[512];
             snprintf(msg, sizeof(msg),
@@ -131,49 +210,3 @@ int main() {
     }
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-   //  printf("server: waiting for connections...\n");
-   // //lets get a socket from thiis?
-   //  //socket returns us a socket descriptor we can use later ot bind to
-   //  printf("socketing\n");
-   //  if ((socketFd = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol)) == -1){
-   //      fprintf(stderr,"Socket creation failed: errno %s\n", strerror(errno));
-   //      return 2;
-   //  }
-   //
-   //  //once we have the socket we can associate it with a port on our machine
-   //  printf("binding\n");
-   //  if ((bind(socketFd, serverInfo->ai_addr, serverInfo->ai_addrlen)) == -1) {
-   //      fprintf(stderr, "bind failed: %s\n", strerror(errno));
-   //      return 4;
-   //  }
-   //
-   //  //listen and loop awiating calls on port 3490
-   //  int l;
-   //  printf("Listening on port: %s\n", MYPORT);
-   //  if ((l = listen(s, BACKLOG)) == -1) {
-   //      fprintf(stderr, "listen failed %s\n", strerror(errno));
-   //  }
-   //  while ()
-   //  int newfd;
-   //  struct sockaddr_storage their_addr;
-   //  socklen_t addr_size;
-   //  addr_size = sizeof their_addr;
-   //  newfd = accept(s, (struct sockaddr *)&their_addr, &addr_size);
-   //  //lets send a connection back
-   //  char *msg = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello World im bold</h1><p>But im not!</p>";
-   //  int len, bytes_sent;
-   //  len = strlen(msg);
-   //  bytes_sent = send(newfd, msg, len, 0);
-   //
-   //  printf("bytes_sent: %d\n", bytes_sent);
