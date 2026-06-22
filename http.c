@@ -172,9 +172,11 @@ int main() {
                 }
 
                 //now lets check against a param request and return json
+                //schema: id, name
                 const char *user = "GET /users";
                 if (strstr(buf, user) != NULL) {
-                    const char *data = "json data here";
+                    const char *data = "{ Id: 1,"
+                                       " Name: User1 }";
                     char msg[512];
                     snprintf(msg, sizeof(msg),
                         "HTTP/1.1 200 OK\r\n"
